@@ -5,40 +5,185 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AP Psychology Practice</title>
 <style>
-:root{--bg:#f8fafc;--card:#fff;--text:#101828;--muted:#667085;--line:#e4e7ec;--soft:#f2f4f7;--blue:#2f5bea;--purple:#7c3aed;--shadow:0 18px 55px rgba(16,24,40,.08);--radius:22px}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0,rgba(47,91,234,.18),transparent 28rem),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-a{text-decoration:none;color:inherit}.wrap{max-width:1180px;margin:0 auto;padding:24px}.nav{display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{display:flex;align-items:center;gap:12px}.logo{width:44px;height:44px;border-radius:16px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;display:grid;place-items:center;font-weight:950}.brand span{color:var(--muted);font-size:13px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border-radius:16px;padding:13px 18px;font-weight:900;box-shadow:0 12px 25px rgba(47,91,234,.18)}
-.btn.secondary{background:#fff;color:var(--text);border:1px solid var(--line);box-shadow:none}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;align-items:stretch;margin-top:32px}.card{background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px}.heroCard{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;min-height:420px;position:relative;overflow:hidden}.heroCard:after{content:"";position:absolute;width:260px;height:260px;right:-70px;bottom:-80px;border-radius:58px;background:rgba(255,255,255,.16);transform:rotate(18deg)}h1{font-size:clamp(46px,8vw,86px);line-height:.88;letter-spacing:-.085em;margin:0 0 16px;position:relative;z-index:1}.heroCard p{font-size:18px;line-height:1.65;max-width:680px;color:rgba(255,255,255,.88);position:relative;z-index:1}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;position:relative;z-index:1}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.stat{background:var(--soft);border:1px solid var(--line);border-radius:18px;padding:16px}.num{font-size:34px;font-weight:950;letter-spacing:-.05em}.label{color:var(--muted);font-size:13px}.unit{padding:14px;border:1px solid var(--line);border-radius:16px;background:#fff;margin:8px 0}.unit b{display:block}.unit span{color:var(--muted);font-size:13px}@media(max-width:850px){.hero{grid-template-columns:1fr}.nav{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}h1{font-size:52px}}
+:root{
+  --bg:#f8fafc;
+  --card:#fff;
+  --text:#101828;
+  --muted:#667085;
+  --line:#e4e7ec;
+  --blue:#2f5bea;
+  --purple:#7c3aed;
+  --shadow:0 18px 55px rgba(16,24,40,.08);
+  --radius:22px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:radial-gradient(circle at top left,rgba(47,91,234,.16),transparent 28rem),var(--bg);
+  color:var(--text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+a{text-decoration:none;color:inherit}
+.wrap{max-width:980px;margin:0 auto;padding:26px}
+.nav{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{
+  width:44px;
+  height:44px;
+  border-radius:16px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  color:#fff;
+  display:grid;
+  place-items:center;
+  font-weight:950;
+}
+.brand span{color:var(--muted);font-size:13px}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--blue);
+  color:#fff;
+  border-radius:16px;
+  padding:13px 18px;
+  font-weight:900;
+  box-shadow:0 12px 25px rgba(47,91,234,.18);
+}
+.btn.secondary{
+  background:#fff;
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:none;
+}
+.hero{
+  margin-top:54px;
+  background:rgba(255,255,255,.9);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:46px;
+  text-align:center;
+}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--blue);
+  border-radius:999px;
+  padding:8px 14px;
+  font-weight:900;
+  font-size:13px;
+  margin-bottom:18px;
+}
+h1{
+  font-size:clamp(42px,7vw,78px);
+  line-height:.92;
+  letter-spacing:-.075em;
+  margin:0 0 18px;
+}
+p{
+  color:var(--muted);
+  font-size:18px;
+  line-height:1.65;
+  max-width:720px;
+  margin:0 auto;
+}
+.actions{
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:26px;
+}
+.info{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  margin-top:26px;
+}
+.box{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:18px;
+}
+.box b{
+  display:block;
+  font-size:26px;
+  letter-spacing:-.04em;
+}
+.box span{
+  color:var(--muted);
+  font-size:13px;
+}
+@media(max-width:760px){
+  .nav{flex-direction:column;align-items:flex-start}
+  .hero{padding:30px 20px}
+  h1{font-size:48px}
+  .info{grid-template-columns:1fr}
+}
 </style>
 </head>
+
 <body>
 <div class="wrap">
+
   <header class="nav">
-    <div class="brand"><div class="logo">Ψ</div><div><b>AP Psychology Practice</b><br><span>OnePrep-style unit review</span></div></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn secondary" href="practice.html#bank">Question Bank</a><a class="btn" href="practice.html">Start Practicing</a></div>
-  </header>
-  <main class="hero">
-    <section class="card heroCard">
-      <h1>AP Psych practice that feels like the real thing.</h1>
-      <p>400 scored questions with uploaded AP-style items plus longer custom scenario questions. Every question is tagged by unit and topic, with cleaned psychological answer choices.</p>
-      <div class="actions"><a class="btn" href="practice.html">Start Practicing</a><a class="btn secondary" href="practice.html#units">Review Units</a></div>
-    </section>
-    <aside class="card">
-      <h2 style="margin-top:0">What’s included</h2>
-      <div class="grid">
-        <div class="stat"><div class="num">400</div><div class="label">Scored questions</div></div>
-        <div class="stat"><div class="num">5</div><div class="label">AP units</div></div>
-        <div class="stat"><div class="num">315</div><div class="label">Scenario custom</div></div>
-        <div class="stat"><div class="num">85</div><div class="label">Verified uploaded</div></div>
+    <div class="brand">
+      <div class="logo">Ψ</div>
+      <div>
+        <b>AP Psychology Practice</b><br>
+        <span>Study smarter. Score higher.</span>
       </div>
-      <h3>Units</h3>
-      <a class="unit" href="practice.html?unit=Unit%201%3A%20Biological%20Bases%20of%20Behavior"><b>Unit 1</b><span>Biological Bases of Behavior</span></a>
-      <a class="unit" href="practice.html?unit=Unit%202%3A%20Cognition"><b>Unit 2</b><span>Cognition</span></a>
-      <a class="unit" href="practice.html?unit=Unit%203%3A%20Development%20and%20Learning"><b>Unit 3</b><span>Development and Learning</span></a>
-      <a class="unit" href="practice.html?unit=Unit%204%3A%20Social%20Psychology%20and%20Personality"><b>Unit 4</b><span>Social Psychology and Personality</span></a>
-      <a class="unit" href="practice.html?unit=Unit%205%3A%20Mental%20and%20Physical%20Health"><b>Unit 5</b><span>Mental and Physical Health</span></a>
-    </aside>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn secondary" href="practice.html#bank">Question Bank</a>
+      <a class="btn" href="practice.html">Start Practicing</a>
+    </div>
+  </header>
+
+  <main class="hero">
+    <div class="badge">AP Psych 5 Prep</div>
+
+    <h1>You’re getting a 5 on AP Psychology.</h1>
+
+    <p>
+      This practice site helps you review like the real exam: scenario-based questions,
+      unit tags, psychological terms, and explanations that show why the right answer is right
+      and why the other choices are wrong.
+    </p>
+
+    <div class="actions">
+      <a class="btn" href="practice.html">Start Practicing</a>
+      <a class="btn secondary" href="practice.html#units">Review Units</a>
+    </div>
+
+    <section class="info">
+      <div class="box">
+        <b>420</b>
+        <span>Practice questions</span>
+      </div>
+
+      <div class="box">
+        <b>5</b>
+        <span>AP Psych units</span>
+      </div>
+
+      <div class="box">
+        <b>1 goal</b>
+        <span>Get that 5</span>
+      </div>
+    </section>
   </main>
+
 </div>
 </body>
 </html>
