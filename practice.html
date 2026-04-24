@@ -34,6 +34,18 @@ h1{font-size:clamp(30px,5vw,52px);line-height:.95;letter-spacing:-.07em;margin:0
 .homeGrid{display:grid;grid-template-columns:1.25fr .75fr;gap:14px} .hero{padding:26px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;min-height:250px;position:relative;overflow:hidden}
 .hero:after{content:"";position:absolute;width:230px;height:230px;right:-65px;bottom:-75px;background:rgba(255,255,255,.16);border-radius:54px;transform:rotate(18deg)}
 .hero h2{font-size:clamp(36px,6vw,68px);line-height:.92;letter-spacing:-.08em;margin:0 0 12px;position:relative;z-index:1} .hero p{color:rgba(255,255,255,.86);max-width:62ch;position:relative;z-index:1}
+
+.timerStrip{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.timerPill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--soft);color:var(--text);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900}
+.timerPill.live{background:var(--soft2);color:var(--blue);border-color:rgba(47,91,234,.25)}
+.timerPill.warn{background:rgba(247,144,9,.12);color:#b54708;border-color:rgba(247,144,9,.24)}
+html[data-theme="dark"] .timerPill.warn{color:#fec84b}
+.qTopMain{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sessionStats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.sessionMini{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:10px}
+.sessionMini b{display:block;font-size:18px;letter-spacing:-.03em}
+.sessionMini span{color:var(--muted);font-size:11px;font-weight:800}
+
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} .stat{background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:14px} .num{font-size:28px;font-weight:950;letter-spacing:-.04em} .label{color:var(--muted);font-size:12px}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px} .field{background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:11px 12px;outline:none;min-width:200px} .field:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,91,234,.12)} .field.wide{flex:1;min-width:290px}
 .practiceGrid{display:grid;grid-template-columns:minmax(0,1fr)330px;gap:14px;align-items:start}
@@ -98,11 +110,11 @@ html[data-theme="dark"] .answer.correct{color:#d1fadf} html[data-theme="dark"] .
       <div class="toolbar card pad"><select class="field" id="practiceUnit"></select><select class="field" id="practiceTopic"></select><button class="btn" id="newRun">New Shuffled Run</button></div>
       <div class="practiceGrid">
         <div class="card">
-          <div class="qTop"><span id="qMeta">Question</span><span id="scoreMeta">Score</span></div>
+          <div class="qTop"><div class="qTopMain"><span id="qMeta">Question</span><span class="timerPill live">⏱️ <span id="questionTimer">0:00</span></span></div><div class="timerStrip"><span class="timerPill">Session <span id="sessionTimer">0:00</span></span><span id="scoreMeta">Score</span></div></div>
           <div class="qBody" id="questionArea"></div>
           <div class="qActions"><button class="btn secondary" id="prevBtn">Back</button><button class="btn secondary" id="skipBtn">Skip</button><button class="btn" id="submitBtn">Submit</button><button class="btn" id="nextBtn" style="display:none">Next</button></div>
         </div>
-        <aside class="card pad"><h3 style="margin-top:0">Navigator</h3><p class="sub">Answered: <b id="answeredStat">0</b></p><p class="sub">Accuracy: <b id="accuracyStat">0%</b></p><div class="navGrid" id="navGrid"></div></aside>
+        <aside class="card pad"><h3 style="margin-top:0">Navigator</h3><p class="sub">Answered: <b id="answeredStat">0</b></p><p class="sub">Accuracy: <b id="accuracyStat">0%</b></p><div class="sessionStats"><div class="sessionMini"><b id="sideQuestionTimer">0:00</b><span>Current question</span></div><div class="sessionMini"><b id="avgTimer">0:00</b><span>Avg answered time</span></div></div><div class="navGrid" id="navGrid"></div></aside>
       </div>
     </section>
     <section id="units" class="panel"><div class="unitGrid" id="unitGrid"></div></section>
@@ -125,10 +137,47 @@ html[data-theme="dark"] .answer.correct{color:#d1fadf} html[data-theme="dark"] .
   let current = 0;
   let selected = null;
   let session = { answered: {}, score: 0, scored: 0, mistakes: [] };
+  let sessionStartedAt = Date.now();
+  let questionStartedAt = Date.now();
+  let timerInterval = null;
   function esc(value) {
     return String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   }
   function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+  function fmtTime(totalSeconds) {
+    const safe = Math.max(0, Math.floor(totalSeconds || 0));
+    const m = Math.floor(safe / 60);
+    const sec = safe % 60;
+    return `${m}:${sec < 10 ? "0" : ""}${sec}`;
+  }
+  function answeredTimeAverage() {
+    const answered = Object.values(session.answered).filter(x => typeof x.timeSpent === "number");
+    if (!answered.length) return 0;
+    return Math.round(answered.reduce((sum, x) => sum + x.timeSpent, 0) / answered.length);
+  }
+  function currentQuestionSeconds() {
+    const st = session.answered[current];
+    if (st && typeof st.timeSpent === "number") return st.timeSpent;
+    return Math.floor((Date.now() - questionStartedAt) / 1000);
+  }
+  function updateTimers() {
+    const qSeconds = currentQuestionSeconds();
+    const sessionSeconds = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    if ($("questionTimer")) $("questionTimer").textContent = fmtTime(qSeconds);
+    if ($("sideQuestionTimer")) $("sideQuestionTimer").textContent = fmtTime(qSeconds);
+    if ($("sessionTimer")) $("sessionTimer").textContent = fmtTime(sessionSeconds);
+    if ($("avgTimer")) $("avgTimer").textContent = fmtTime(answeredTimeAverage());
+    const pill = $("questionTimer")?.closest(".timerPill");
+    if (pill) pill.classList.toggle("warn", qSeconds >= 75);
+  }
+  function startQuestionTimer(isAnswered=false) {
+    clearInterval(timerInterval);
+    if (!isAnswered) {
+      questionStartedAt = Date.now();
+      timerInterval = setInterval(updateTimers, 1000);
+    }
+    updateTimers();
+  }
   function units() { return [...new Set(QUESTIONS.map(q => q.unit))].sort((a,b)=>a.localeCompare(b, undefined, {numeric:true})); }
   function topics(unit="all") { return [...new Set(QUESTIONS.filter(q=>unit==="all"||q.unit===unit).map(q=>q.topic))].sort(); }
   function stats() { try { return JSON.parse(localStorage.getItem(LS) || '{"attempts":0,"best":null,"last":null}'); } catch { return {attempts:0,best:null,last:null}; } }
@@ -166,7 +215,7 @@ html[data-theme="dark"] .answer.correct{color:#d1fadf} html[data-theme="dark"] .
     const u = $("practiceUnit").value, t = $("practiceTopic").value;
     let source = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t));
     order = shuffle(source.map(x=>x.i));
-    current = 0; selected = null; session = { answered: {}, score: 0, scored: 0, mistakes: [] };
+    current = 0; selected = null; session = { answered: {}, score: 0, scored: 0, mistakes: [] }; sessionStartedAt = Date.now(); questionStartedAt = Date.now();
     if (go) showTab("practice");
     renderQuestion();
   }
@@ -260,6 +309,7 @@ html[data-theme="dark"] .answer.correct{color:#d1fadf} html[data-theme="dark"] .
     return `<div class="feedbackBox">
       <div class="feedbackHead ${isCorrect ? "ok" : "no"}">${isCorrect ? "✅" : "❌"} ${main}</div>
       <div class="feedbackBody">
+        <div><b>Time on this question:</b> ${fmtTime(state.timeSpent || 0)}</div>
         <div><b>Why the right answer is right:</b><br>${esc(correctWhy)}</div>
         <div class="reasonGrid">${rows}</div>
       </div>
@@ -268,7 +318,7 @@ html[data-theme="dark"] .answer.correct{color:#d1fadf} html[data-theme="dark"] .
 
   function renderQuestion() {
     const q = QUESTIONS[order[current]];
-    if (!q) { $("questionArea").innerHTML = '<div class="empty">No questions match this filter.</div>'; return; }
+    if (!q) { clearInterval(timerInterval); $("questionArea").innerHTML = '<div class="empty">No questions match this filter.</div>'; return; }
     const state = session.answered[current];
     $("qMeta").textContent = `Question ${current+1} of ${order.length}`;
     $("scoreMeta").textContent = `Score ${session.score}/${session.scored}`;
@@ -282,13 +332,15 @@ html[data-theme="dark"] .answer.correct{color:#d1fadf} html[data-theme="dark"] .
     $("questionArea").innerHTML = `<div class="badges"><span class="badge">${esc(q.unit)}</span><span class="badge gray">${esc(q.topic)}</span><span class="badge gray">${esc(q.source)}</span></div><p class="stem">${esc(q.stem)}</p>${img}<div class="answers">${opts}</div>${exp}`;
     document.querySelectorAll("[data-choice]").forEach(btn=>btn.addEventListener("click",()=>selectOption(Number(btn.dataset.choice))));
     $("submitBtn").style.display = state ? "none" : "inline-flex"; $("nextBtn").style.display = state ? "inline-flex" : "none"; $("submitBtn").disabled = selected === null;
+    startQuestionTimer(Boolean(state));
     renderNav();
   }
   function selectOption(i) { if (session.answered[current]) return; selected = i; renderQuestion(); }
   function submitAnswer() {
     if (selected === null || session.answered[current]) return;
     const q = QUESTIONS[order[current]], correct = selected === q.correct;
-    session.answered[current] = {selected, correct}; session.scored += 1; if (correct) session.score += 1; else session.mistakes.push(order[current]);
+    const timeSpent = currentQuestionSeconds();
+    session.answered[current] = {selected, correct, timeSpent}; session.scored += 1; if (correct) session.score += 1; else session.mistakes.push(order[current]);
     if (Object.keys(session.answered).length === order.length) saveStats();
     renderQuestion(); renderHome();
   }
