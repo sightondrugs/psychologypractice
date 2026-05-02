@@ -1086,7 +1086,29 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function esc(value) {
     return String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   }
-  function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+  // Question order is intentionally deterministic: Unit 1 → Unit 5, then Review Skills.
+  // This keeps practice predictable and avoids randomizing the bank.
+  function unitOrderValue(unit="") {
+    const m = String(unit).match(/Unit\s*(\d+)/i);
+    if (m) return Number(m[1]);
+    if (/review/i.test(unit)) return 99;
+    return 98;
+  }
+  function topicOrderValue(topic="") {
+    const m = String(topic).match(/Topic\s*(\d+)\.(\d+)/i);
+    if (m) return Number(m[1]) * 100 + Number(m[2]);
+    if (/research|data/i.test(topic)) return 9999;
+    return 9000;
+  }
+  function orderedQuestionIndices(indices) {
+    return [...indices].sort((a,b) => {
+      const qa = QUESTIONS[a] || {}, qb = QUESTIONS[b] || {};
+      return unitOrderValue(qa.unit) - unitOrderValue(qb.unit)
+        || topicOrderValue(qa.topic) - topicOrderValue(qb.topic)
+        || String(qa.topic || "").localeCompare(String(qb.topic || ""), undefined, {numeric:true})
+        || a - b;
+    });
+  }
   function fmtTime(totalSeconds) {
     const safe = Math.max(0, Math.floor(totalSeconds || 0));
     const m = Math.floor(safe / 60);
@@ -1130,7 +1152,8 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   }
 
   const PROGRESS_LS = "ap_psych_completed_questions_v4";
-  const OLD_PROGRESS_KEYS = ["ap_psych_completed_questions_v2", "ap_psych_completed_questions_v3"];
+  const PROGRESS_CANONICAL_LS = "ap_psych_training_completed_questions";
+  const OLD_PROGRESS_KEYS = ["ap_psych_completed_questions_v2", "ap_psych_completed_questions_v3", PROGRESS_CANONICAL_LS];
   let progressMemoryBackup = { completed:{} };
 
   function stableQuestionKey(index) {
@@ -1143,8 +1166,10 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   }
   function blankProgress() { return { completed:{}, updatedAt: Date.now() }; }
   function readProgressKey(key) {
-    try { return JSON.parse(localStorage.getItem(key) || '{"completed":{}}'); }
-    catch { return { completed:{} }; }
+    try {
+      const raw = localStorage.getItem(key) || sessionStorage.getItem(key) || '{"completed":{}}';
+      return JSON.parse(raw);
+    } catch { return { completed:{} }; }
   }
   function progressData() {
     try {
@@ -1165,7 +1190,10 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     data.updatedAt = Date.now();
     progressMemoryBackup = data;
     try {
-      localStorage.setItem(PROGRESS_LS, JSON.stringify(data));
+      const packed = JSON.stringify(data);
+      localStorage.setItem(PROGRESS_LS, packed);
+      localStorage.setItem(PROGRESS_CANONICAL_LS, packed);
+      sessionStorage.setItem(PROGRESS_LS, packed);
       localStorage.setItem("ap_psych_progress_last_saved", String(Date.now()));
       return true;
     } catch (err) {
@@ -1220,7 +1248,10 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     if (!confirm("Reset all saved completed-question progress and saved score stats?")) return;
     try {
       localStorage.removeItem(PROGRESS_LS);
+      localStorage.removeItem(PROGRESS_CANONICAL_LS);
       OLD_PROGRESS_KEYS.forEach(k => localStorage.removeItem(k));
+      sessionStorage.removeItem(PROGRESS_LS);
+      sessionStorage.removeItem(PROGRESS_CANONICAL_LS);
       localStorage.removeItem(LS);
       localStorage.removeItem("ap_psych_progress_last_saved");
     } catch {}
@@ -1263,7 +1294,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function startRun(go=true) {
     const u = $("practiceUnit").value, t = $("practiceTopic").value;
     let source = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t));
-    order = shuffle(source.map(x=>x.i));
+    order = orderedQuestionIndices(source.map(x=>x.i));
     current = 0; selected = null; session = { answered: {}, score: 0, scored: 0, mistakes: [], firstTry: 0 }; attemptLog = {}; sessionStartedAt = Date.now(); questionStartedAt = Date.now();
     applySavedProgressToCurrentOrder(false);
     if (go) showTab("practice");
@@ -2475,9 +2506,9 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   }
   function renderBank() {
     const term = ($("search").value||"").toLowerCase().trim(), u=$("bankUnit").value, t=$("bankTopic").value;
-    const list = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t)&&(!term||[x.q.stem,x.q.unit,x.q.topic,x.q.term,...x.q.options].join(" ").toLowerCase().includes(term)));
+    const list = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t)&&(!term||[x.q.stem,x.q.unit,x.q.topic,x.q.term,...x.q.options].join(" ").toLowerCase().includes(term))).sort((a,b)=>orderedQuestionIndices([a.i,b.i])[0]===a.i?-1:1);
     $("bankList").innerHTML = list.length ? list.map(({q,i})=>`<div class="card bankItem"><div><h4>${esc(q.stem).slice(0,210)}${q.stem.length>210?"…":""}</h4><div class="badges"><span class="badge">${esc(q.unit)}</span><span class="badge gray">${esc(q.topic)}</span><span class="badge gray">${esc(q.term)}</span>${isCompletedQuestion(i) ? '<span class="badge doneBadge">Done</span>' : ''}</div></div><button class="btn secondary" data-open="${i}">Open</button></div>`).join("") : '<div class="card empty">No matching questions found.</div>';
-    document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{ order=QUESTIONS.map((_,x)=>x); current=Number(b.dataset.open); selected=null; session = { answered: {}, score: 0, scored: 0, mistakes: [], firstTry: 0 }; attemptLog = {}; applySavedProgressToCurrentOrder(false); showTab("practice"); renderQuestion(); }));
+    document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{ order=orderedQuestionIndices(QUESTIONS.map((_,x)=>x)); const openedIndex=Number(b.dataset.open); current=Math.max(0, order.indexOf(openedIndex)); selected=null; session = { answered: {}, score: 0, scored: 0, mistakes: [], firstTry: 0 }; attemptLog = {}; applySavedProgressToCurrentOrder(false); showTab("practice"); renderQuestion(); }));
   }
   function renderMistakes() {
     $("mistakesList").innerHTML = session.mistakes.length ? session.mistakes.map(i=>{ const q=QUESTIONS[i]; return `<div class="card pad" style="margin-bottom:10px"><div class="badges"><span class="badge">${esc(q.unit)}</span><span class="badge gray">${esc(q.topic)}</span></div><h3>${esc(q.stem)}</h3><p class="sub"><b>Answer:</b> ${letters[q.correct]}. ${esc(q.options[q.correct])}</p></div>`; }).join("") : '<div class="card empty">No mistakes in this session yet.</div>';
@@ -2487,7 +2518,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     const done = completedCount();
     let lastSaved = "Not saved yet";
     try { const stamp = Number(localStorage.getItem("ap_psych_progress_last_saved") || 0); if (stamp) lastSaved = new Date(stamp).toLocaleString(); } catch {}
-    $("statsPage").innerHTML = `<div class="stats"><div class="stat"><div class="num">${Object.keys(session.answered).length}</div><div class="label">Loaded/mastered this session</div></div><div class="stat"><div class="num">${done}</div><div class="label">Saved completed questions</div></div><div class="stat"><div class="num">${QUESTIONS.length ? Math.round(done/QUESTIONS.length*100)+"%" : "0%"}</div><div class="label">Total bank progress</div></div><div class="stat"><div class="num">${session.scored?Math.round(session.firstTry/session.scored*100)+"%":"0%"}</div><div class="label">First-try accuracy</div></div><div class="stat"><div class="num">${session.mistakes.length}</div><div class="label">Questions that needed retry</div></div><div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Total questions</div></div></div><div class="card pad" style="margin-top:14px"><h3 style="margin-top:0">Saved Progress</h3><p class="sub">Your completed questions are saved in this browser. Use Load Saved Progress if you refresh or start a new run and want completed questions marked inside the current practice session.</p><p class="sub"><b>Last saved:</b> ${esc(lastSaved)}</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn secondary" id="loadProgressPageBtn">Load Saved Progress</button><button class="btn secondary" id="resetProgressPageBtn">Reset Progress</button></div></div>`;
+    $("statsPage").innerHTML = `<div class="stats"><div class="stat"><div class="num">${Object.keys(session.answered).length}</div><div class="label">Loaded/mastered this session</div></div><div class="stat"><div class="num">${done}</div><div class="label">Saved completed questions</div></div><div class="stat"><div class="num">${QUESTIONS.length ? Math.round(done/QUESTIONS.length*100)+"%" : "0%"}</div><div class="label">Total bank progress</div></div><div class="stat"><div class="num">${session.scored?Math.round(session.firstTry/session.scored*100)+"%":"0%"}</div><div class="label">First-try accuracy</div></div><div class="stat"><div class="num">${session.mistakes.length}</div><div class="label">Questions that needed retry</div></div><div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Total questions</div></div></div><div class="card pad" style="margin-top:14px"><h3 style="margin-top:0">Saved Progress</h3><p class="sub">Your completed questions are saved automatically in this browser and loaded automatically into each practice run. Use Load Saved Progress to manually refresh the saved markers if needed.</p><p class="sub"><b>Last saved:</b> ${esc(lastSaved)}</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn secondary" id="loadProgressPageBtn">Load Saved Progress</button><button class="btn secondary" id="resetProgressPageBtn">Reset Progress</button></div></div>`;
     $("loadProgressPageBtn")?.addEventListener("click", () => applySavedProgressToCurrentOrder(true));
     $("resetProgressPageBtn")?.addEventListener("click", resetSavedProgress);
   }
