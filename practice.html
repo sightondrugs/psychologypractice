@@ -909,6 +909,38 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
 .choiceDefinition{margin-top:8px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.065);border:1px solid rgba(190,204,255,.13);line-height:1.45}
 .reasonText b:not(:first-child){display:inline;margin-top:6px}
 
+
+
+/* ===== PROGRESS MEMORY + DEFINITION-ONLY FEEDBACK ===== */
+.bubble.completed:not(.current):not(.correct):not(.wrong):not(.attempted){
+  background:rgba(122,162,255,.13) !important;
+  color:#dbeafe !important;
+  border-color:rgba(122,162,255,.32) !important;
+}
+.bubble.completed:not(.current):not(.correct):not(.wrong):not(.attempted)::after{
+  content:"✓";
+  font-size:10px;
+  margin-left:2px;
+  opacity:.85;
+}
+.doneBadge{
+  color:#d1fae5 !important;
+  background:rgba(52,211,153,.14) !important;
+  border-color:rgba(52,211,153,.28) !important;
+}
+.choiceDefinition{
+  margin-top:8px;
+  padding:10px 11px;
+  border-radius:12px;
+  background:rgba(255,255,255,.065);
+  border:1px solid rgba(190,204,255,.13);
+  line-height:1.45;
+}
+.definitionOnlyGrid .reasonText b:first-child{
+  display:block;
+  margin-bottom:5px;
+}
+
 </style>
 </head>
 <body>
@@ -1059,11 +1091,13 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   const $ = (id) => document.getElementById(id);
   const letters = ["A","B","C","D","E"];
   const LS = "ap_psych_scenario_units_v5";
+  const DONE_LS = "ap_psych_done_questions_v1";
   let order = QUESTIONS.map((_, i) => i);
   let current = 0;
   let selected = null;
   let session = { answered: {}, score: 0, scored: 0, mistakes: [], firstTry: 0 };
   let attemptLog = {};
+  let completed = loadCompleted();
   let sessionStartedAt = Date.now();
   let questionStartedAt = Date.now();
   let timerInterval = null;
@@ -1108,6 +1142,31 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function units() { return [...new Set(QUESTIONS.map(q => q.unit))].sort((a,b)=>a.localeCompare(b, undefined, {numeric:true})); }
   function topics(unit="all") { return [...new Set(QUESTIONS.filter(q=>unit==="all"||q.unit===unit).map(q=>q.topic))].sort(); }
   function stats() { try { return JSON.parse(localStorage.getItem(LS) || '{"attempts":0,"best":null,"last":null}'); } catch { return {attempts:0,best:null,last:null}; } }
+  function tinyHash(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }
+  function questionKeyByIndex(index) {
+    const q = QUESTIONS[index] || {};
+    return tinyHash([q.unit, q.topic, q.stem, ...(q.options || [])].join("||"));
+  }
+  function loadCompleted() {
+    try { return new Set(JSON.parse(localStorage.getItem(DONE_LS) || "[]")); }
+    catch { return new Set(); }
+  }
+  function saveCompleted() { localStorage.setItem(DONE_LS, JSON.stringify([...completed])); }
+  function isCompletedIndex(index) { return completed.has(questionKeyByIndex(index)); }
+  function markCompleted(index) {
+    completed.add(questionKeyByIndex(index));
+    saveCompleted();
+  }
+  function completedCount() {
+    return QUESTIONS.reduce((sum, _, i) => sum + (isCompletedIndex(i) ? 1 : 0), 0);
+  }
   function saveStats() {
     const pct = session.scored ? Math.round(session.score/session.scored*100) : 0;
     const s = stats(); s.attempts += 1; s.last = pct; s.best = s.best === null ? pct : Math.max(s.best, pct); localStorage.setItem(LS, JSON.stringify(s));
@@ -1122,7 +1181,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     document.querySelectorAll(".navBtn[data-tab]").forEach(b=>b.classList.toggle("active", b.dataset.tab===id));
     const titles = {
       home:["AP Psychology Practice","Unlimited OnePrep-style practice with detailed answer explanations."],
-      practice:["Practice","Answer one scenario question at a time. If you miss it, keep trying until you get it right, with explanations after each attempt."],
+      practice:["Practice","Answer one scenario question at a time. If you miss it, keep trying until you get it right. Definitions appear after you answer."],
       units:["Unit Review","Pick a unit or topic to practice just that section."],
       bank:["Question Bank","Search the full cleaned bank by unit, topic, term, or question."],
       mistakes:["Mistakes","Review questions missed in your current session."],
@@ -1136,7 +1195,8 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     const s = stats();
     const uploaded = QUESTIONS.filter(q=>q.source==="uploaded").length;
     const custom = QUESTIONS.filter(q=>q.source==="custom").length;
-    $("homeStats").innerHTML = `<div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Scored questions</div></div><div class="stat"><div class="num">5</div><div class="label">AP units</div></div><div class="stat"><div class="num">${uploaded}</div><div class="label">Verified uploaded</div></div><div class="stat"><div class="num">${custom}</div><div class="label">Scenario custom</div></div><div class="stat"><div class="num">${s.best===null?"—":s.best+"%"}</div><div class="label">Best score</div></div><div class="stat"><div class="num">${s.attempts}</div><div class="label">Saved attempts</div></div>`;
+    const done = completedCount();
+    $("homeStats").innerHTML = `<div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Scored questions</div></div><div class="stat"><div class="num">5</div><div class="label">AP units</div></div><div class="stat"><div class="num">${uploaded}</div><div class="label">Verified uploaded</div></div><div class="stat"><div class="num">${custom}</div><div class="label">Scenario custom</div></div><div class="stat"><div class="num">${done}</div><div class="label">Questions completed</div></div><div class="stat"><div class="num">${QUESTIONS.length-done}</div><div class="label">Questions left</div></div><div class="stat"><div class="num">${s.best===null?"—":s.best+"%"}</div><div class="label">Best score</div></div><div class="stat"><div class="num">${s.attempts}</div><div class="label">Saved attempts</div></div>`;
   }
   function startRun(go=true) {
     const u = $("practiceUnit").value, t = $("practiceTopic").value;
@@ -1370,71 +1430,33 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function makeFeedback(q, state, attempts = []) {
     if (!state && !attempts.length) return "";
 
-    const correctText = q.options[q.correct] || "";
     const latestSelected = state?.selected ?? attempts[attempts.length - 1]?.selected;
     const selectedText = q.options[latestSelected] || "";
     const isCorrect = Boolean(state?.correct);
-    const isInProgress = Boolean(state?.inProgress);
     const totalAttempts = attempts.length || (state?.attempts?.length ?? 1);
 
-    const correctWhy = q.explanation || q.term || noteFor(correctText) || `${correctText} is the concept that best matches the situation described in the stem.`;
-
-    // IMPORTANT: while the student is still wrong, do NOT reveal the correct answer.
-    // Only explain the specific answer they just chose, then let them try again.
+    // While the student is still retrying, show ONLY the definition of the answer they selected.
+    // Do not reveal the correct answer until they get it right.
     if (!isCorrect) {
-      const wrongNote = noteFor(selectedText);
-      const wrongWhy = wrongNote
-        ? `${cleanConcept(selectedText)} is a real psychology concept, but it does not fit the specific clue or behavior described in this question.`
-        : `${cleanConcept(selectedText)} does not match the key clue in the scenario. Look back at what the person is doing, feeling, or experiencing, then choose the term that directly names that process.`;
-
       return `<div class="feedbackBox">
-        <div class="feedbackHead no">❌ Not quite — ${letters[latestSelected]}. ${esc(selectedText)}</div>
+        <div class="feedbackHead no">❌ Not quite — try another answer.</div>
         <div class="feedbackBody">
-          <div><b>Time on this question:</b> ${fmtTime(state?.timeSpent || currentQuestionSeconds())}</div>
-          <div class="attemptItem"><b>Why this answer is wrong:</b><br>${esc(wrongWhy)}<details class="stepDetails"><summary>Step 2: clue to re-check</summary><div>${esc(questionClue(q))}</div></details></div>
+          <div><b>Selected:</b> ${letters[latestSelected]}. ${esc(selectedText)}</div>
+          <div class="attemptItem"><b>Definition:</b><br>${esc(definitionFor(selectedText))}</div>
         </div>
       </div>`;
     }
 
-    const wrongAttempts = attempts.filter(a => !a.correct);
-    const attemptHistory = wrongAttempts.length ? `<div>
-      <b>Your wrong attempt${wrongAttempts.length > 1 ? "s" : ""}:</b>
-      <div class="attemptList">
-        ${wrongAttempts.map((a, idx) => {
-          const wrongText = q.options[a.selected] || "";
-          const wrongNote = noteFor(wrongText);
-          const wrongWhy = wrongNote
-            ? `${cleanConcept(wrongText)} is a different concept: ${wrongNote}`
-            : `${cleanConcept(wrongText)} does not match the scenario's key clue.`;
-          return `<div class="attemptItem"><b>Attempt ${idx + 1}: ${letters[a.selected]}. ${esc(wrongText)}</b><br>${esc(wrongWhy)}</div>`;
-        }).join("")}
-      </div>
-    </div>` : "";
-
-    const rows = q.options.map((opt, i) => {
-      const isRight = i === q.correct;
-      let reason = "";
-      if (isRight) {
-        reason = `Correct because ${correctWhy}`;
-      } else {
-        const optNote = noteFor(opt);
-        reason = optNote
-          ? `${cleanConcept(opt)} describes a different idea: ${optNote}`
-          : `${cleanConcept(opt)} does not match the key clue in the scenario.`;
-      }
-      return `<div class="reasonRow ${isRight ? "good" : ""}">
+    const rows = q.options.map((opt, i) => `<div class="reasonRow ${i === q.correct ? "good" : ""}">
         <span class="letter">${letters[i]}</span>
-        <span class="reasonText"><b>${esc(opt)}</b>${esc(reason)}<br><b>Definition:</b> ${esc(definitionFor(opt))}</span>
-      </div>`;
-    }).join("");
+        <span class="reasonText"><b>${esc(opt)}</b><b>Definition:</b> ${esc(definitionFor(opt))}</span>
+      </div>`).join("");
 
     return `<div class="feedbackBox">
-      <div class="feedbackHead ok">✅ Correct — you got it ${totalAttempts > 1 ? `after ${totalAttempts} attempts` : "on the first try"}. ${esc(correctText)} best matches the clue in the question.</div>
-      <div class="feedbackBody">
+      <div class="feedbackHead ok">✅ Correct — you got it ${totalAttempts > 1 ? `after ${totalAttempts} attempts` : "on the first try"}.</div>
+      <div class="feedbackBody definitionOnlyGrid">
         <div><b>Time on this question:</b> ${fmtTime(state?.timeSpent || currentQuestionSeconds())}</div>
-        ${attemptHistory}
-        <div><b>Why the right answer is right:</b><br>${esc(correctWhy)}<details class="stepDetails"><summary>Step 2: how to recognize this pattern</summary><div>${esc(questionClue(q))}<br>The correct answer is the choice that directly names that pattern, not just a related term from the same unit.</div></details></div>
-        <div><b>Why each choice is right or wrong:</b></div>
+        <div><b>Definitions for each choice:</b></div>
         <div class="reasonGrid">${rows}</div>
       </div>
     </div>`;
@@ -1478,26 +1500,12 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   }
 
   function wrongPopupHTML(q, opt) {
-    const optNote = noteFor(opt);
-    const first = optNote
-      ? `${cleanConcept(opt)} is a real psychology concept, but it does not fit this scenario's key clue.`
-      : `${cleanConcept(opt)} does not match the key clue in this scenario.`;
-    const step2 = optNote
-      ? `What this choice usually means: ${optNote}`
-      : `Check whether this choice names the behavior, symptom, brain part, learning process, or bias actually being described.`;
-    const step3 = wrongComparisonHint(q, opt);
-    return `<b>Why this choice is wrong</b>${esc(first)}
-      <div class="choiceDefinition"><b>Definition of this choice:</b> ${esc(definitionFor(opt))}</div>
-      <details class="stepDetails"><summary>Step 2: understand this choice</summary><div>${esc(step2)}</div></details>
-      <details class="stepDetails"><summary>Step 3: re-check the clue</summary><div>${esc(questionClue(q))}<br>${esc(step3)}</div></details>`;
+    return `<div class="choiceDefinition"><b>Definition:</b> ${esc(definitionFor(opt))}</div>`;
   }
 
   function correctPopupHTML(q) {
     const correctText = q.options[q.correct] || "";
-    const why = q.explanation || noteFor(correctText) || `${cleanConcept(correctText)} best matches the main clue in the question.`;
-    return `<b>Why this choice is correct</b>${esc(why)}
-      <div class="choiceDefinition"><b>Definition:</b> ${esc(definitionFor(correctText))}</div>
-      <details class="stepDetails"><summary>Step 2: how to spot it next time</summary><div>${esc(questionClue(q))}<br>When you see that clue, choose the term that most directly explains it instead of a related-but-too-broad concept.</div></details>`;
+    return `<div class="choiceDefinition"><b>Definition:</b> ${esc(definitionFor(correctText))}</div>`;
   }
 
   function wrongPopupFor(q, opt) {
@@ -1567,6 +1575,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
       session.score += 1;
       if (attempts.length === 1) session.firstTry += 1;
       if (attempts.some(a => !a.correct) && !session.mistakes.includes(order[current])) session.mistakes.push(order[current]);
+      markCompleted(order[current]);
       if (Object.keys(session.answered).length === order.length) saveStats();
       selected = null;
     } else {
@@ -1582,7 +1591,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function renderNav() {
     $("answeredStat").textContent = Object.keys(session.answered).length;
     $("accuracyStat").textContent = session.scored ? Math.round(session.firstTry/session.scored*100)+"% first try" : "0%";
-    $("navGrid").innerHTML = order.map((_,pos)=>{ const st=session.answered[pos]; const at=attemptLog[pos]; let cls="bubble"; if(pos===current)cls+=" current"; if(st)cls+=st.wrongAttempts?" wrong":" correct"; else if(at?.length) cls+=" attempted"; return `<button class="${cls}" data-jump="${pos}">${pos+1}</button>`; }).join("");
+    $("navGrid").innerHTML = order.map((questionIndex,pos)=>{ const st=session.answered[pos]; const at=attemptLog[pos]; let cls="bubble"; if(isCompletedIndex(questionIndex)) cls+=" completed"; if(pos===current)cls+=" current"; if(st)cls+=st.wrongAttempts?" wrong":" correct"; else if(at?.length) cls+=" attempted"; return `<button class="${cls}" data-jump="${pos}" title="${isCompletedIndex(questionIndex)?'Completed before':'Not completed yet'}">${pos+1}</button>`; }).join("");
     document.querySelectorAll("[data-jump]").forEach(b=>b.addEventListener("click",()=>jump(Number(b.dataset.jump))));
   }
   function renderUnits() {
@@ -1595,7 +1604,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function renderBank() {
     const term = ($("search").value||"").toLowerCase().trim(), u=$("bankUnit").value, t=$("bankTopic").value;
     const list = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t)&&(!term||[x.q.stem,x.q.unit,x.q.topic,x.q.term,...x.q.options].join(" ").toLowerCase().includes(term)));
-    $("bankList").innerHTML = list.length ? list.map(({q,i})=>`<div class="card bankItem"><div><h4>${esc(q.stem).slice(0,210)}${q.stem.length>210?"…":""}</h4><div class="badges"><span class="badge">${esc(q.unit)}</span><span class="badge gray">${esc(q.topic)}</span><span class="badge gray">${esc(q.term)}</span></div></div><button class="btn secondary" data-open="${i}">Open</button></div>`).join("") : '<div class="card empty">No matching questions found.</div>';
+    $("bankList").innerHTML = list.length ? list.map(({q,i})=>`<div class="card bankItem ${isCompletedIndex(i)?'completedItem':''}"><div><h4>${esc(q.stem).slice(0,210)}${q.stem.length>210?"…":""}</h4><div class="badges"><span class="badge">${esc(q.unit)}</span><span class="badge gray">${esc(q.topic)}</span><span class="badge gray">${esc(q.term)}</span>${isCompletedIndex(i)?'<span class="badge doneBadge">Done</span>':''}</div></div><button class="btn secondary" data-open="${i}">Open</button></div>`).join("") : '<div class="card empty">No matching questions found.</div>';
     document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{ order=QUESTIONS.map((_,x)=>x); current=Number(b.dataset.open); selected=null; showTab("practice"); renderQuestion(); }));
   }
   function renderMistakes() {
@@ -1603,7 +1612,8 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   }
   function renderStats() {
     const s = stats();
-    $("statsPage").innerHTML = `<div class="stats"><div class="stat"><div class="num">${Object.keys(session.answered).length}</div><div class="label">Mastered this session</div></div><div class="stat"><div class="num">${session.scored?Math.round(session.firstTry/session.scored*100)+"%":"0%"}</div><div class="label">First-try accuracy</div></div><div class="stat"><div class="num">${session.mistakes.length}</div><div class="label">Questions that needed retry</div></div><div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Total questions</div></div></div>`;
+    const done = completedCount();
+    $("statsPage").innerHTML = `<div class="stats"><div class="stat"><div class="num">${Object.keys(session.answered).length}</div><div class="label">Mastered this session</div></div><div class="stat"><div class="num">${done}</div><div class="label">Remembered completed</div></div><div class="stat"><div class="num">${QUESTIONS.length-done}</div><div class="label">Remaining in bank</div></div><div class="stat"><div class="num">${session.scored?Math.round(session.firstTry/session.scored*100)+"%":"0%"}</div><div class="label">First-try accuracy</div></div><div class="stat"><div class="num">${session.mistakes.length}</div><div class="label">Questions that needed retry</div></div><div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Total questions</div></div></div>`;
   }
   function init() {
     fillSelect($("practiceUnit"), units(), "All units");
