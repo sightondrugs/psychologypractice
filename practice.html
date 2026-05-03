@@ -923,6 +923,11 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   margin-bottom:6px;
 }
 
+
+.field:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
 </style>
 </head>
 <body>
@@ -958,7 +963,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
       </div>
     </section>
     <section id="practice" class="panel">
-      <div class="toolbar card pad"><select class="field" id="practiceUnit"></select><select class="field" id="practiceTopic"></select><button class="btn" id="newRun"><svg class="uiIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 17c4 0 5-10 12-10h5"/><path d="M16 21h5v-5"/><path d="M4 7c2.4 0 3.8 2.1 5.1 4.4"/></svg> New Shuffled Run</button></div>
+      <div class="toolbar card pad"><select class="field" id="practiceMode"><option value="currentOrdered">Current setup in order</option><option value="allUnitsOrdered">All units in order</option></select><select class="field" id="practiceUnit"></select><select class="field" id="practiceTopic"></select><select class="field" id="practiceCount"><option value="all">All matching questions</option><option value="10">First 10</option><option value="25">First 25</option><option value="50">First 50</option><option value="100">First 100</option><option value="200">First 200</option></select><button class="btn" id="newRun"><svg class="uiIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/><path d="M8 6v12"/></svg> Start Ordered Run</button></div>
       <div class="practiceGrid">
         <div class="card">
           <div class="qTop"><div class="qTopMain"><span id="qMeta">Question</span><span class="timerPill live"><svg class="uiIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><path d="M12 22a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"/><path d="M9 2h6"/></svg><span id="questionTimer">0:00</span></span></div><div class="timerStrip"><span class="timerPill"><svg class="uiIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Session <span id="sessionTimer">0:00</span></span><span id="scoreMeta">Score</span></div></div>
@@ -1143,8 +1148,8 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     }
     updateTimers();
   }
-  function units() { return [...new Set(QUESTIONS.map(q => q.unit))].sort((a,b)=>a.localeCompare(b, undefined, {numeric:true})); }
-  function topics(unit="all") { return [...new Set(QUESTIONS.filter(q=>unit==="all"||q.unit===unit).map(q=>q.topic))].sort(); }
+  function units() { return [...new Set(QUESTIONS.map(q => q.unit))].sort((a,b)=>unitOrderValue(a)-unitOrderValue(b) || a.localeCompare(b, undefined, {numeric:true})); }
+  function topics(unit="all") { return [...new Set(QUESTIONS.filter(q=>unit==="all"||q.unit===unit).map(q=>q.topic))].sort((a,b)=>topicOrderValue(a)-topicOrderValue(b) || a.localeCompare(b, undefined, {numeric:true})); }
   function stats() { try { return JSON.parse(localStorage.getItem(LS) || '{"attempts":0,"best":null,"last":null}'); } catch { return {attempts:0,best:null,last:null}; } }
   function saveStats() {
     const pct = session.scored ? Math.round(session.score/session.scored*100) : 0;
@@ -1234,10 +1239,8 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
         loaded += 1;
       }
     });
-    if (loaded) {
-      const firstOpen = order.findIndex((_, pos) => !session.answered[pos]);
-      if (firstOpen >= 0 && session.answered[current]) current = firstOpen;
-    }
+    // Keep the current question number fixed. Loading saved progress marks completed questions,
+    // but it does not jump around or change the ordered setup.
     if (showMessage) {
       alert(loaded ? `Loaded ${loaded} completed question${loaded === 1 ? "" : "s"} into this practice run.` : "No saved completed questions matched this practice run yet.");
     }
@@ -1292,9 +1295,23 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     $("homeStats").innerHTML = `<div class="stat"><div class="num">${QUESTIONS.length}</div><div class="label">Scored questions</div></div><div class="stat"><div class="num">5</div><div class="label">AP units</div></div><div class="stat"><div class="num">${uploaded}</div><div class="label">Verified uploaded</div></div><div class="stat"><div class="num">${custom}</div><div class="label">Scenario custom</div></div><div class="stat"><div class="num">${completedCount()}</div><div class="label">Saved completed</div></div><div class="stat"><div class="num">${s.best===null?"—":s.best+"%"}</div><div class="label">Best score</div></div>`;
   }
   function startRun(go=true) {
-    const u = $("practiceUnit").value, t = $("practiceTopic").value;
+    const mode = $("practiceMode")?.value || "currentOrdered";
+    const u = mode === "allUnitsOrdered" ? "all" : $("practiceUnit").value;
+    const t = mode === "allUnitsOrdered" ? "all" : $("practiceTopic").value;
+    const countValue = $("practiceCount")?.value || "all";
+
     let source = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t));
+
+    // No shuffle. This is a fixed, repeatable order for the selected setup:
+    // Unit 1 → Unit 2 → Unit 3 → Unit 4 → Unit 5 → Review Skills,
+    // then topic number, then original question position.
     order = orderedQuestionIndices(source.map(x=>x.i));
+
+    if (countValue !== "all") {
+      const requested = Math.max(1, Number(countValue) || order.length);
+      order = order.slice(0, requested);
+    }
+
     current = 0; selected = null; session = { answered: {}, score: 0, scored: 0, mistakes: [], firstTry: 0 }; attemptLog = {}; sessionStartedAt = Date.now(); questionStartedAt = Date.now();
     applySavedProgressToCurrentOrder(false);
     if (go) showTab("practice");
@@ -2429,7 +2446,7 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     if (!q) { clearInterval(timerInterval); $("questionArea").innerHTML = '<div class="empty">No questions match this filter.</div>'; return; }
     const state = session.answered[current];
     const attempts = attemptLog[current] || [];
-    $("qMeta").textContent = `Question ${current+1} of ${order.length}`;
+    $("qMeta").textContent = `Question ${current+1} of ${order.length} · Fixed order`;
     $("scoreMeta").textContent = `Mastered ${session.score}/${session.scored}`;
     const opts = q.options.map((o,i)=> {
       let cls = "answer";
@@ -2500,13 +2517,14 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
   function renderUnits() {
     const grouped = {};
     QUESTIONS.forEach(q=>{ grouped[q.unit] ??= {count:0, topics:{}}; grouped[q.unit].count++; grouped[q.unit].topics[q.topic]=(grouped[q.unit].topics[q.topic]||0)+1; });
-    $("unitGrid").innerHTML = units().map(unit=>`<div class="card pad unitCard"><h3>${esc(unit)}</h3><p>${grouped[unit].count} questions identified to this unit.</p><button class="btn" data-unit-start="${esc(unit)}">Practice Unit</button><div class="topicList">${Object.entries(grouped[unit].topics).map(([topic,count])=>`<button class="topicBtn" data-topic-start="${esc(unit)}|||${esc(topic)}">${esc(topic)} <span class="badge gray">${count}</span></button>`).join("")}</div></div>`).join("");
+    $("unitGrid").innerHTML = units().map(unit=>`<div class="card pad unitCard"><h3>${esc(unit)}</h3><p>${grouped[unit].count} questions identified to this unit.</p><button class="btn" data-unit-start="${esc(unit)}">Practice Unit</button><div class="topicList">${Object.entries(grouped[unit].topics).sort(([a],[b])=>topicOrderValue(a)-topicOrderValue(b) || a.localeCompare(b, undefined, {numeric:true})).map(([topic,count])=>`<button class="topicBtn" data-topic-start="${esc(unit)}|||${esc(topic)}">${esc(topic)} <span class="badge gray">${count}</span></button>`).join("")}</div></div>`).join("");
     document.querySelectorAll("[data-unit-start]").forEach(b=>b.addEventListener("click",()=>{ $("practiceUnit").value=b.dataset.unitStart; syncTopicSelects(); $("practiceTopic").value="all"; startRun(true); }));
     document.querySelectorAll("[data-topic-start]").forEach(b=>b.addEventListener("click",()=>{ const [u,t]=b.dataset.topicStart.split("|||"); $("practiceUnit").value=u; syncTopicSelects(); $("practiceTopic").value=t; startRun(true); }));
   }
   function renderBank() {
     const term = ($("search").value||"").toLowerCase().trim(), u=$("bankUnit").value, t=$("bankTopic").value;
-    const list = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t)&&(!term||[x.q.stem,x.q.unit,x.q.topic,x.q.term,...x.q.options].join(" ").toLowerCase().includes(term))).sort((a,b)=>orderedQuestionIndices([a.i,b.i])[0]===a.i?-1:1);
+    const bankOrderRank = new Map(orderedQuestionIndices(QUESTIONS.map((_,x)=>x)).map((questionIndex, rank)=>[questionIndex, rank]));
+    const list = QUESTIONS.map((q,i)=>({q,i})).filter(x=>(u==="all"||x.q.unit===u)&&(t==="all"||x.q.topic===t)&&(!term||[x.q.stem,x.q.unit,x.q.topic,x.q.term,...x.q.options].join(" ").toLowerCase().includes(term))).sort((a,b)=>(bankOrderRank.get(a.i) ?? a.i) - (bankOrderRank.get(b.i) ?? b.i));
     $("bankList").innerHTML = list.length ? list.map(({q,i})=>`<div class="card bankItem"><div><h4>${esc(q.stem).slice(0,210)}${q.stem.length>210?"…":""}</h4><div class="badges"><span class="badge">${esc(q.unit)}</span><span class="badge gray">${esc(q.topic)}</span><span class="badge gray">${esc(q.term)}</span>${isCompletedQuestion(i) ? '<span class="badge doneBadge">Done</span>' : ''}</div></div><button class="btn secondary" data-open="${i}">Open</button></div>`).join("") : '<div class="card empty">No matching questions found.</div>';
     document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{ order=orderedQuestionIndices(QUESTIONS.map((_,x)=>x)); const openedIndex=Number(b.dataset.open); current=Math.max(0, order.indexOf(openedIndex)); selected=null; session = { answered: {}, score: 0, scored: 0, mistakes: [], firstTry: 0 }; attemptLog = {}; applySavedProgressToCurrentOrder(false); showTab("practice"); renderQuestion(); }));
   }
@@ -2527,6 +2545,11 @@ h1,h2,h3,.hero h2,#pageTitle,.brand b,.navTitle,.num,.stem{
     fillSelect($("bankUnit"), units(), "All units");
     syncTopicSelects();
     $("practiceUnit").addEventListener("change", syncTopicSelects);
+    $("practiceMode")?.addEventListener("change", () => {
+      const allUnits = $("practiceMode").value === "allUnitsOrdered";
+      $("practiceUnit").disabled = allUnits;
+      $("practiceTopic").disabled = allUnits;
+    });
     $("bankUnit").addEventListener("change", () => { syncTopicSelects(); renderBank(); });
     $("bankTopic").addEventListener("change", renderBank);
     $("search").addEventListener("input", renderBank);
